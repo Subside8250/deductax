@@ -1,0 +1,18 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Kept off the repo: these describe the taxpayer
+SPEC.md
+prototype.jsx
+
+# Never publish captured data or exports
+*.csv
+*.pdf
+receipts/
+test-data/
+*.jpg
+*.jpeg
+*.png
+!public/*.png

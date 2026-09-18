@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+body {
+  font-feature-settings: "tnum";
+}
+
+/* Printing a report: drop the app's chrome and background, keep rows together. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  body {
+    background: #fff;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .print\:border-0 {
+    border: 0 !important;
+  }
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+  table {
+    page-break-inside: auto;
+  }
+  tr,
+  section {
+    page-break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+}

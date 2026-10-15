@@ -43,6 +43,9 @@ export type Draft = {
   isNew: boolean;
   // A reminder to add the receipt later; filing it turns it into a normal record.
   status?: "filed" | "awaiting";
+  // Set when a captured receipt was matched to an existing reminder, so the card can
+  // say so and the user can undo it.
+  matched?: { id: string; label: string; why: string } | null;
   capturedAt: string;
   tripId: string | null;
   // "auto" follows the date; "user" means the trip (or no trip) was chosen by hand.
@@ -180,6 +183,39 @@ export function syncTrip(prev: Draft | null, next: Draft, trips: Trip[]): Draft 
     },
   };
 }
+
+// Points a freshly captured receipt at the reminder it belongs to: the record keeps its
+// id, so filing completes the note instead of leaving a duplicate behind. Anything the
+// receipt didn't say is taken from the note.
+export function adoptReminder(d: Draft, reminder: ExpenseRecord, why: string): Draft {
+  const blank = blankForm();
+  const form = { ...d.form };
+  if (form.vendor === blank.vendor) form.vendor = reminder.vendor;
+  if (form.description === blank.description) form.description = reminder.description;
+  if (!parseAmount(form.total) && reminder.total > 0) form.total = String(reminder.total);
+  if (form.section === blank.section && reminder.section !== "REVIEW") form.section = reminder.section;
+  if (form.note === blank.note) form.note = reminder.note;
+  return {
+    ...d,
+    id: reminder.id,
+    isNew: false,
+    status: "awaiting",
+    capturedAt: reminder.capturedAt,
+    tripId: d.tripId ?? reminder.tripId,
+    form,
+    matched: { id: reminder.id, label: `${reminder.vendor || reminder.description}${reminder.total > 0 ? ` · ${reminder.total.toFixed(2)}` : ""}`, why },
+  };
+}
+
+// Undoes a match: the capture becomes its own new record and the reminder is left alone.
+export const releaseReminder = (d: Draft): Draft => ({
+  ...d,
+  id: crypto.randomUUID(),
+  isNew: true,
+  status: "filed",
+  capturedAt: new Date().toISOString(),
+  matched: null,
+});
 
 export function draftFromRecord(r: ExpenseRecord): Draft {
   const tripSplit = hasTripSplit(r);

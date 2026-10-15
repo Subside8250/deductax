@@ -20,6 +20,7 @@ type Props = {
   busy: boolean;
   onChange: (draft: Draft) => void;
   onPickTrip: (tripId: string | null) => void;
+  onUnmatch: () => void;
   onNewTrip: () => void;
   onAttach: (file: File) => void;
   onReadAI: () => void;
@@ -35,7 +36,7 @@ const confidenceStyles = {
 };
 
 export default function ReviewCard({
-  draft, existing, trips, busy, onChange, onPickTrip, onNewTrip, onAttach, onReadAI, onFile, onDiscard, onDelete,
+  draft, existing, trips, busy, onChange, onPickTrip, onUnmatch, onNewTrip, onAttach, onReadAI, onFile, onDiscard, onDelete,
 }: Props) {
   const [showErrors, setShowErrors] = useState(false);
   const [viewing, setViewing] = useState(false);
@@ -99,10 +100,20 @@ export default function ReviewCard({
         )}
       </div>
 
-      {isReminder && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-stone-50 px-4 py-3 text-sm text-slate-700">
-          A note to yourself. Enter whatever you know now; it stays out of your totals until you add the receipt and file it.
+      {draft.matched ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span className="font-medium">Matched your note: {draft.matched.label}</span> ({draft.matched.why}). Filing this completes that
+          note instead of adding a second record.
+          <button type="button" onClick={onUnmatch} className="mt-1 block font-medium underline">
+            Not this note — file it separately
+          </button>
         </div>
+      ) : (
+        isReminder && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-stone-50 px-4 py-3 text-sm text-slate-700">
+            A note to yourself. Enter whatever you know now; it stays out of your totals until you add the receipt and file it.
+          </div>
+        )
       )}
 
       {reading && (

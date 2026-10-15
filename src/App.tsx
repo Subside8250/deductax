@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Camera, CircleAlert, CircleCheck, FileText, NotebookPen, PenLine, Plane, Settings as SettingsIcon, X } from "lucide-react";
+import { Camera, CircleAlert, CircleCheck, FileText, PenLine, Plane, Settings as SettingsIcon, X } from "lucide-react";
 import ReviewCard from "./components/ReviewCard";
 import SectionList from "./components/SectionList";
 import Settings from "./components/Settings";
 import SyncBadge from "./components/SyncBadge";
 import TripForm from "./components/TripForm";
 import { TripList, TripSummary } from "./components/Trips";
+import QuickNote from "./components/QuickNote";
 import { SummaryReport, TripDiary } from "./components/Report";
 import {
   clearDraft, deleteFile, deleteRecord, deleteTrip, listRecords, listTrips, loadDraft, putDraft, requestPersistence,
   saveFile, saveRecord, saveRecords, saveTrip,
 } from "./lib/db";
-import { applyExtraction, draftFromRecord, newDraft, normalizeDraft, syncTrip, toRecord, type Draft } from "./lib/draft";
+import {
+  adoptReminder, applyExtraction, draftFromRecord, newDraft, normalizeDraft, releaseReminder, syncTrip, toRecord, type Draft,
+} from "./lib/draft";
+import { bestReminderMatch, parseQuickNote } from "./lib/quickNote";
 import { buildCsv, csvFileName, downloadCsv } from "./lib/exportCsv";
 import { todayISO } from "./lib/sections";
 import { availableYears, awaitingReceipts, fyOf, groupBySection } from "./lib/totals";
@@ -49,6 +53,8 @@ export default function App() {
   // Async reads finish later; they need the trips as they are then, not when they started.
   const tripsRef = useRef<Trip[]>([]);
   tripsRef.current = trips;
+  const recordsRef = useRef<ExpenseRecord[]>([]);
+  recordsRef.current = records;
 
   // After a sync, show what's now stored. An open card is left alone.
   const reloadData = async () => {
@@ -115,10 +121,39 @@ export default function App() {
     try {
       const { readReceipt } = await import("./lib/extract");
       const result = await readReceipt(fileId, { forceAI: explicit });
-      setDraft((d) => (current(d) ? syncTrip(d, applyExtraction(d!, result, explicit), tripsRef.current) : d));
+      setDraft((d) => {
+        if (!current(d)) return d;
+        let next = syncTrip(d, applyExtraction(d!, result, explicit), tripsRef.current);
+        // A new capture may complete a note made earlier.
+        if (next.isNew && !next.matched) {
+          const match = bestReminderMatch(recordsRef.current.filter((r) => r.status === "awaiting"), {
+            vendor: next.form.vendor,
+            total: Number(next.form.total.replace(/[$,\s]/g, "")) || null,
+            date: next.form.date,
+          });
+          if (match) next = adoptReminder(next, match.record, match.why);
+        }
+        return next;
+      });
     } catch (e) {
       const message = e instanceof Error && e.message ? e.message : "Couldn't read that one.";
       setDraft((d) => (current(d) ? { ...d!, extraction: { status: "failed", message } } : d));
+    }
+  };
+
+  // A one-line note: saved straight away, no card.
+  const addQuickNote = async (text: string) => {
+    const { vendor, total, date } = parseQuickNote(text);
+    const d = newDraft(null, "awaiting");
+    const record = toRecord({ ...d, form: { ...d.form, vendor, date, total: total ? String(total) : "" } });
+    try {
+      await saveRecord(record);
+      setRecords((rs) => mergeById(rs, [record]));
+      setNotice(`Noted "${record.vendor}". It's waiting for its receipt.`);
+      requestPersistence();
+      sync.requestSync();
+    } catch {
+      setError("Couldn't save that note.");
     }
   };
 
@@ -304,6 +339,7 @@ export default function App() {
             busy={busy}
             onChange={changeDraft}
             onPickTrip={(tripId) => changeDraft({ ...draft, tripId, tripLink: "user" })}
+            onUnmatch={() => setDraft(releaseReminder(draft))}
             onNewTrip={() => setTripEditor({ trip: blankTrip(draft.form.date || todayISO()), isNew: true, forDraft: true })}
             onAttach={attach}
             onReadAI={() => draft.imageId && read(draft.id, draft.imageId, true)}
@@ -347,16 +383,11 @@ export default function App() {
                 <FileText size={18} /> Choose a file
               </button>
             </div>
-            <div className="mb-8 grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => startDraft()} disabled={!loaded}
-                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50">
-                <PenLine size={15} /> Enter without a receipt
-              </button>
-              <button type="button" onClick={() => startDraft(null, "awaiting")} disabled={!loaded}
-                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50">
-                <NotebookPen size={15} /> Note for later
-              </button>
-            </div>
+            <button type="button" onClick={() => startDraft()} disabled={!loaded}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50">
+              <PenLine size={15} /> Enter without a receipt
+            </button>
+            <QuickNote onAdd={addQuickNote} disabled={!loaded} />
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pick} />
             <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={pick} />
 

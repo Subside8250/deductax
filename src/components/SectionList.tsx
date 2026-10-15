@@ -1,10 +1,11 @@
-import { CircleAlert, Download, Paperclip, Printer } from "lucide-react";
+import { CircleAlert, Download, NotebookPen, Paperclip, Printer } from "lucide-react";
 import { money } from "../lib/sections";
 import { claimableOf, deductionTotal, fyLabel, fyRange, isDeductible, type SectionGroup } from "../lib/totals";
 import type { ExpenseRecord, Trip } from "../lib/types";
 
 type Props = {
   groups: SectionGroup[];
+  awaiting: ExpenseRecord[];
   trips: Trip[];
   years: number[];
   fy: number;
@@ -15,7 +16,7 @@ type Props = {
 };
 
 // The primary view (SPEC §9.1): claimable amounts by myTax label, in return order.
-export default function SectionList({ groups, trips, years, fy, onYear, onOpen, onExport, onReport }: Props) {
+export default function SectionList({ groups, awaiting, trips, years, fy, onYear, onOpen, onExport, onReport }: Props) {
   const total = deductionTotal(groups);
   const review = groups.find((g) => g.code === "REVIEW");
   const unconfirmed = groups.flatMap((g) => g.items).filter((r) => !r.split.confirmed).length;
@@ -23,6 +24,33 @@ export default function SectionList({ groups, trips, years, fy, onYear, onOpen, 
 
   return (
     <div>
+      {awaiting.length > 0 && (
+        <section className="mb-6">
+          <h3 className="mb-2 flex items-center gap-2 font-semibold">
+            <NotebookPen size={16} className="text-slate-500" />
+            Waiting for receipts · {awaiting.length}
+          </h3>
+          <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {awaiting.map((r) => (
+              <li key={r.id}>
+                <button type="button" onClick={() => onOpen(r)}
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:bg-stone-100">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{r.vendor || r.description}</div>
+                    <div className="truncate text-sm text-slate-500">
+                      {r.date}
+                      {r.vendor && r.description ? ` · ${r.description}` : ""}
+                      {" · add the receipt"}
+                    </div>
+                  </div>
+                  {r.total > 0 && <div className="shrink-0 text-right text-slate-500">{money(r.total)}</div>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-slate-300 pb-3">
         <div>
           <label className="mb-1 flex items-center gap-2 text-sm text-slate-600">

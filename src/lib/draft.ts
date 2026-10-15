@@ -41,6 +41,8 @@ export type TripSplitState = {
 export type Draft = {
   id: string; // becomes the record id
   isNew: boolean;
+  // A reminder to add the receipt later; filing it turns it into a normal record.
+  status?: "filed" | "awaiting";
   capturedAt: string;
   tripId: string | null;
   // "auto" follows the date; "user" means the trip (or no trip) was chosen by hand.
@@ -89,10 +91,11 @@ const blankForm = (): DraftForm => ({
   soloEquivalent: "",
 });
 
-export function newDraft(file?: StoredFile | null): Draft {
+export function newDraft(file?: StoredFile | null, status: "filed" | "awaiting" = "filed"): Draft {
   return {
     id: crypto.randomUUID(),
     isNew: true,
+    status,
     capturedAt: new Date().toISOString(),
     tripId: null,
     tripLink: null,
@@ -184,6 +187,7 @@ export function draftFromRecord(r: ExpenseRecord): Draft {
   return {
     id: r.id,
     isNew: false,
+    status: r.status ?? "filed",
     capturedAt: r.capturedAt,
     tripId: r.tripId,
     tripLink: "auto",
@@ -223,6 +227,11 @@ export function draftFromRecord(r: ExpenseRecord): Draft {
 export const activeTripSplit = (d: Draft) => (d.tripSplit && d.form.section !== "PERSONAL" ? d.tripSplit : null);
 
 export const canClaimPart = (d: Draft) => !activeTripSplit(d) && d.form.section !== "" && d.form.section !== "PERSONAL";
+
+// A reminder only has to say what it is; everything else waits for the receipt.
+export function validateReminder(f: DraftForm): FormErrors {
+  return f.vendor.trim() || f.description.trim() ? {} : { vendor: "Enter who you paid, or what it was for." };
+}
 
 export function validate(d: Draft, trips: Trip[]): FormErrors {
   const f = d.form;
@@ -297,14 +306,17 @@ export function toRecord(d: Draft): ExpenseRecord {
   const solo = parseAmount(f.soloEquivalent);
   return {
     id: d.id,
+    status: d.status ?? "filed",
     capturedAt: d.capturedAt,
     updatedAt: new Date().toISOString(),
     vendor: f.vendor.trim(),
     date: f.date,
-    total: round2(parseAmount(f.total)),
+    // A reminder may have no amount yet.
+    total: round2(parseAmount(f.total)) || 0,
     gst: f.gst.trim() ? round2(parseAmount(f.gst)) : 0,
     description: f.description.trim(),
-    section: f.section as SectionCode,
+    // A reminder has no label yet; REVIEW stands in until it is filed.
+    section: (f.section || "REVIEW") as SectionCode,
     tripId: d.tripId,
     expenseKind: f.expenseKind,
     checkIn: accommodation && f.checkIn ? f.checkIn : null,

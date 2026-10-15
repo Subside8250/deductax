@@ -20,6 +20,9 @@ export type Split = {
 // Named ExpenseRecord rather than Record to avoid shadowing TypeScript's Record<K, V>.
 export type ExpenseRecord = {
   id: string;
+  // "awaiting" is a note to add the receipt later: it is kept out of totals and exports
+  // until it is filed. Absent on records saved before reminders existed.
+  status?: "filed" | "awaiting";
   capturedAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp; per-record merge key for sync (§8)
   vendor: string;

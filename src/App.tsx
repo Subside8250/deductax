@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Camera, CircleAlert, CircleCheck, FileText, PenLine, Plane, Settings as SettingsIcon, X } from "lucide-react";
+import { Camera, CircleAlert, CircleCheck, FileText, NotebookPen, PenLine, Plane, Settings as SettingsIcon, X } from "lucide-react";
 import ReviewCard from "./components/ReviewCard";
 import SectionList from "./components/SectionList";
 import Settings from "./components/Settings";
@@ -14,7 +14,7 @@ import {
 import { applyExtraction, draftFromRecord, newDraft, normalizeDraft, syncTrip, toRecord, type Draft } from "./lib/draft";
 import { buildCsv, csvFileName, downloadCsv } from "./lib/exportCsv";
 import { todayISO } from "./lib/sections";
-import { availableYears, fyOf, groupBySection } from "./lib/totals";
+import { availableYears, awaitingReceipts, fyOf, groupBySection } from "./lib/totals";
 import { blankTrip, relinkRecords, unlinkTrip } from "./lib/tripSplit";
 import type { ExpenseRecord, Trip } from "./lib/types";
 import { useSync } from "./lib/useSync";
@@ -122,8 +122,8 @@ export default function App() {
     }
   };
 
-  const startDraft = (stored: Awaited<ReturnType<typeof store>> = null) => {
-    const d = syncTrip(null, newDraft(stored), trips);
+  const startDraft = (stored: Awaited<ReturnType<typeof store>> = null, status: "filed" | "awaiting" = "filed") => {
+    const d = syncTrip(null, newDraft(stored, status), trips);
     setDraft(d);
     setNotice(null);
     return d;
@@ -145,14 +145,14 @@ export default function App() {
     read(draft.id, stored.id, false);
   };
 
-  const fileDraft = async () => {
+  const fileDraft = async (status: "filed" | "awaiting") => {
     if (!draft) return;
-    const record = toRecord(draft);
+    const record = toRecord({ ...draft, status });
     try {
       await saveRecord(record);
       if (draft.originalImageId && draft.originalImageId !== draft.imageId) await deleteFile(draft.originalImageId);
       setRecords((rs) => mergeById(rs, [record]));
-      if (view.name === "home") setFy(fyOf(record.date)); // show the year the record was filed under
+      if (view.name === "home" && status === "filed") setFy(fyOf(record.date)); // show the year it was filed under
       setDraft(null);
       setError(null);
       requestPersistence();
@@ -334,7 +334,7 @@ export default function App() {
         ) : view.name === "diary" && openTrip ? (
           <TripDiary trip={openTrip} records={records} onBack={() => setView({ name: "trip", id: openTrip.id })} />
         ) : view.name === "report" ? (
-          <SummaryReport records={records} trips={trips} fy={fy} onBack={() => setView({ name: "home" })} />
+          <SummaryReport records={records} trips={trips} fy={fy} awaiting={awaitingReceipts(records).length} onBack={() => setView({ name: "home" })} />
         ) : (
           <>
             <div className="mb-3 grid grid-cols-2 gap-3">
@@ -347,10 +347,16 @@ export default function App() {
                 <FileText size={18} /> Choose a file
               </button>
             </div>
-            <button type="button" onClick={() => startDraft()} disabled={!loaded}
-              className="mb-8 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50">
-              <PenLine size={15} /> Enter without a receipt
-            </button>
+            <div className="mb-8 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => startDraft()} disabled={!loaded}
+                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50">
+                <PenLine size={15} /> Enter without a receipt
+              </button>
+              <button type="button" onClick={() => startDraft(null, "awaiting")} disabled={!loaded}
+                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-50">
+                <NotebookPen size={15} /> Note for later
+              </button>
+            </div>
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pick} />
             <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={pick} />
 
@@ -362,6 +368,7 @@ export default function App() {
               loaded && (
                 <SectionList
                   groups={groupBySection(records, fy)}
+                  awaiting={awaitingReceipts(records)}
                   trips={trips}
                   years={availableYears(records, todayISO())}
                   fy={fy}

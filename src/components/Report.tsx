@@ -34,7 +34,13 @@ function PrintBar({ onBack, label }: { onBack: () => void; label: string }) {
 const th = "border-b border-slate-300 py-1.5 pr-3 text-left font-semibold";
 const td = "border-b border-slate-200 py-1.5 pr-3 align-top";
 
-export function SummaryReport({ records, trips, fy, onBack }: { records: ExpenseRecord[]; trips: Trip[]; fy: number; onBack: () => void }) {
+export function SummaryReport({ records, trips, fy, awaiting, onBack }: {
+  records: ExpenseRecord[];
+  trips: Trip[];
+  fy: number;
+  awaiting: number;
+  onBack: () => void;
+}) {
   const groups = groupBySection(records, fy);
   const claimable = groups.filter((g) => isDeductible(g.code));
   const review = groups.find((g) => g.code === "REVIEW");
@@ -125,6 +131,13 @@ export function SummaryReport({ records, trips, fy, onBack }: { records: Expense
             </table>
           </section>
         ))}
+
+        {awaiting > 0 && (
+          <p className="mb-6 text-sm">
+            {awaiting} expense{awaiting === 1 ? " is" : "s are"} noted but still waiting for a receipt, and {awaiting === 1 ? "is" : "are"} not
+            included above.
+          </p>
+        )}
 
         <footer className="mt-6 border-t border-slate-300 pt-3 text-xs leading-relaxed text-slate-600">
           Amounts are as recorded from receipts and invoices held by the taxpayer. Splits between work and private use are the

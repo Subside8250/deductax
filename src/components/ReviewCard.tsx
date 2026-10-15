@@ -1,8 +1,9 @@
 import { useRef, useState, type ReactNode } from "react";
-import { Check, CircleAlert, FileText, ImagePlus, LoaderCircle, Plane, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Check, CircleAlert, FileText, ImagePlus, LoaderCircle, NotebookPen, Plane, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { EXPENSE_KINDS, SECTIONS, money, sectionByCode, sectionLabel } from "../lib/sections";
 import {
-  activeTripSplit, buildSplit, canClaimPart, parseAmount, validate, type Draft, type DraftForm, type TripSplitState,
+  activeTripSplit, buildSplit, canClaimPart, parseAmount, validate, validateReminder,
+  type Draft, type DraftForm, type TripSplitState,
 } from "../lib/draft";
 import { TRAVEL_KINDS, needsSolo } from "../lib/tripSplit";
 import { useStoredFile } from "../lib/useStoredFile";
@@ -22,7 +23,7 @@ type Props = {
   onNewTrip: () => void;
   onAttach: (file: File) => void;
   onReadAI: () => void;
-  onFile: () => void;
+  onFile: (status: "filed" | "awaiting") => void;
   onDiscard: () => void;
   onDelete: () => void;
 };
@@ -44,7 +45,8 @@ export default function ReviewCard({
   const attachment = fileState?.status === "ready" ? fileState : null;
 
   const f = draft.form;
-  const errors = showErrors ? validate(draft, trips) : {};
+  const isReminder = draft.status === "awaiting";
+  const errors = showErrors ? (isReminder ? validateReminder(f) : validate(draft, trips)) : {};
   const update = (patch: Partial<DraftForm>) => onChange({ ...draft, form: { ...f, ...patch } });
   const ts = activeTripSplit(draft);
   const updateSplit = (patch: Partial<TripSplitState>) => ts && onChange({ ...draft, tripSplit: { ...ts, ...patch } });
@@ -54,8 +56,10 @@ export default function ReviewCard({
   const askTrip = !trip && TRAVEL_KINDS.has(f.expenseKind) && (f.section === "D2" || f.section === "D4");
   const total = parseAmount(f.total) || 0;
 
-  const submit = () => {
-    if (Object.keys(validate(draft, trips)).length) {
+  // Filing needs the full set; keeping it as a reminder only needs enough to recognise it.
+  const submit = (status: "filed" | "awaiting") => {
+    const problems = status === "awaiting" ? validateReminder(f) : validate(draft, trips);
+    if (Object.keys(problems).length) {
       setShowErrors(true);
       // Let the error text render, then bring the first problem into view.
       requestAnimationFrame(() =>
@@ -63,7 +67,7 @@ export default function ReviewCard({
       );
       return;
     }
-    onFile();
+    onFile(status);
   };
 
   const reasonLabel =
@@ -85,13 +89,21 @@ export default function ReviewCard({
   return (
     <div ref={cardRef} className="rounded-2xl border border-slate-300 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-4">
-        <h2 className="font-semibold">{draft.isNew ? "New expense" : "Edit expense"}</h2>
+        <h2 className="font-semibold">
+          {isReminder ? (draft.isNew ? "Note for later" : "Waiting for its receipt") : draft.isNew ? "New expense" : "Edit expense"}
+        </h2>
         {ex?.status === "done" && (
           <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${confidenceStyles[draft.confidence]}`}>
             {draft.confidence} confidence
           </span>
         )}
       </div>
+
+      {isReminder && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-stone-50 px-4 py-3 text-sm text-slate-700">
+          A note to yourself. Enter whatever you know now; it stays out of your totals until you add the receipt and file it.
+        </div>
+      )}
 
       {reading && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-stone-50 px-4 py-3 text-sm text-slate-700">
@@ -335,11 +347,24 @@ export default function ReviewCard({
         <p className="mb-3 text-sm text-red-700">Fix the highlighted fields before filing.</p>
       )}
 
-      <div className="flex items-center gap-3">
-        <button type="button" onClick={submit} disabled={busy}
-          className="flex items-center gap-2 rounded-lg bg-emerald-800 px-4 py-2.5 font-medium text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:opacity-50">
-          <Check size={16} /> {draft.isNew ? "File it" : "Save changes"}
-        </button>
+      <div className="flex flex-wrap items-center gap-3">
+        {isReminder ? (
+          <>
+            <button type="button" onClick={() => submit("awaiting")} disabled={busy}
+              className="flex items-center gap-2 rounded-lg bg-emerald-800 px-4 py-2.5 font-medium text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:opacity-50">
+              <NotebookPen size={16} /> {draft.isNew ? "Save reminder" : "Keep waiting"}
+            </button>
+            <button type="button" onClick={() => submit("filed")} disabled={busy}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-medium hover:border-slate-400 disabled:opacity-50">
+              <Check size={16} /> File it now
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => submit("filed")} disabled={busy}
+            className="flex items-center gap-2 rounded-lg bg-emerald-800 px-4 py-2.5 font-medium text-white hover:bg-emerald-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:opacity-50">
+            <Check size={16} /> {draft.isNew ? "File it" : "Save changes"}
+          </button>
+        )}
         <button type="button" onClick={onDiscard} className="rounded-lg px-4 py-2.5 font-medium text-slate-600 hover:text-slate-900">
           {draft.isNew ? "Discard" : "Cancel"}
         </button>

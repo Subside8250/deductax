@@ -27,8 +27,15 @@ export type SectionGroup = (typeof SECTIONS)[number] & {
 
 // Records for one financial year, grouped in the order the labels appear on the return,
 // newest first within each label. Empty labels are left out.
+export const isAwaiting = (r: ExpenseRecord) => r.status === "awaiting";
+
+// Reminders waiting for their receipt, newest first. They are not deductions yet, so
+// they stay out of groups, totals and exports until they are filed.
+export const awaitingReceipts = (records: ExpenseRecord[]) =>
+  records.filter(isAwaiting).sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+
 export function groupBySection(records: ExpenseRecord[], fy: number): SectionGroup[] {
-  const inYear = records.filter((r) => fyOf(r.date) === fy);
+  const inYear = records.filter((r) => fyOf(r.date) === fy && !isAwaiting(r));
   return SECTIONS.map((s) => {
     const items = inYear
       .filter((r) => r.section === s.code)
@@ -42,5 +49,5 @@ export const deductionTotal = (groups: SectionGroup[]) =>
 
 // Years that have records, plus the current one, newest first.
 export function availableYears(records: ExpenseRecord[], today: string) {
-  return [...new Set([fyOf(today), ...records.map((r) => fyOf(r.date))])].sort((a, b) => b - a);
+  return [...new Set([fyOf(today), ...records.filter((r) => !isAwaiting(r)).map((r) => fyOf(r.date))])].sort((a, b) => b - a);
 }

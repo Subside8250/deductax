@@ -16,7 +16,7 @@ export async function openPdf(blob: Blob) {
 }
 
 // Reconstructs text lines from the text layer by grouping items that share a baseline.
-export async function pdfLines(doc: PDFDocumentProxy, maxPages = 3) {
+export async function pdfLines(doc: PDFDocumentProxy, maxPages = 10) {
   const lines: string[] = [];
   for (let p = 1; p <= Math.min(doc.numPages, maxPages); p++) {
     const page = await doc.getPage(p);
@@ -38,17 +38,5 @@ export async function pdfLines(doc: PDFDocumentProxy, maxPages = 3) {
 
 export const hasTextLayer = (lines: string[]) => lines.join("").replace(/[^A-Za-z0-9]/g, "").length >= 30;
 
-// Renders page 1 for the vision path (scanned PDFs with no text layer).
-export async function renderFirstPage(doc: PDFDocumentProxy) {
-  const page = await doc.getPage(1);
-  const base = page.getViewport({ scale: 1 });
-  const viewport = page.getViewport({ scale: 2200 / Math.max(base.width, base.height) });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(viewport.width);
-  canvas.height = Math.round(viewport.height);
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvas, canvasContext: ctx, viewport }).promise;
-  return canvas;
-}
+// Scanned PDFs are sent to the API whole, which reads every page, so nothing here
+// rasterises them.

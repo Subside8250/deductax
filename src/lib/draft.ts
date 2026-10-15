@@ -25,7 +25,8 @@ export type Extraction =
   | { status: "reading" }
   | { status: "failed"; message: string }
   | { status: "done"; source: "pdf"; matched: boolean }
-  | { status: "done"; source: "ai"; matched: true; sections: number; cropped: boolean; model?: string };
+  // `detail` says what was read, e.g. "3 sections of a long receipt" or "4 PDF pages".
+  | { status: "done"; source: "ai"; matched: true; detail?: string; model?: string };
 
 // A trip-based split proposal as it stands on the card (§4). The user may change the
 // claimable amount and the basis; filing requires ticking it as checked.

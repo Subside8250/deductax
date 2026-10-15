@@ -107,7 +107,7 @@ export default function ReviewCard({
       {ex?.status === "done" && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
           {ex.source === "ai"
-            ? `Filled in by AI${ex.model ? ` (${ex.model})` : ""}${ex.sections > 1 ? ` from ${ex.sections} sections of a long receipt` : ""}. Check every field before filing.`
+            ? `Filled in by AI${ex.model ? ` (${ex.model})` : ""}${ex.detail ? ` from ${ex.detail}` : ""}. Check every field before filing.`
             : ex.matched
               ? "Read from the PDF on this device, no AI used. Check every field before filing."
               : "Read the amounts and dates from the PDF, but couldn't tell what it's for. Fill in the rest, or read it with AI."}

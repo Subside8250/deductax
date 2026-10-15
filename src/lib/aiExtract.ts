@@ -54,20 +54,44 @@ export function toPatch(p: Record<string, unknown>) {
   return { patch, confidence };
 }
 
-export async function readWithClaude(apiKey: string, model: ModelChoice, images: PreparedImages, trips: Trip[], profile: Profile) {
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, timeout: 60_000 });
+// What is being read: a photo (possibly split into sections), a PDF sent whole for the
+// API to rasterise, or the text layer of a PDF, which is exact and far cheaper.
+export type Subject =
+  | { kind: "images"; images: PreparedImages }
+  | { kind: "pdf"; base64: string; pages: number }
+  | { kind: "text"; text: string; pages: number };
 
-  const content: Anthropic.ContentBlockParam[] = images.tiles.map((data) => ({
+function subjectBlocks(subject: Subject): Anthropic.ContentBlockParam[] {
+  if (subject.kind === "pdf") {
+    return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: subject.base64 } }];
+  }
+  if (subject.kind === "text") {
+    return [
+      {
+        type: "text",
+        text: `The text below was extracted from the ${subject.pages === 1 ? "PDF" : `${subject.pages}-page PDF`} of this receipt or invoice. Read it as the document itself.\n\n${subject.text}`,
+      },
+    ];
+  }
+  const { images } = subject;
+  const blocks: Anthropic.ContentBlockParam[] = images.tiles.map((data) => ({
     type: "image",
     source: { type: "base64", media_type: "image/jpeg", data },
   }));
   if (images.axis) {
     const order = images.axis === "vertical" ? "top to bottom" : "left to right";
-    content.push({
+    blocks.push({
       type: "text",
       text: `The ${images.tiles.length} images above are overlapping sections of one ${images.axis === "vertical" ? "long" : "wide"} receipt, in order from ${order}. Read them together as a single document.`,
     });
   }
+  return blocks;
+}
+
+export async function readWithClaude(apiKey: string, model: ModelChoice, subject: Subject, trips: Trip[], profile: Profile) {
+  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, timeout: 120_000 });
+
+  const content: Anthropic.ContentBlockParam[] = subjectBlocks(subject);
   content.push({ type: "text", text: buildPrompt(trips, profile) });
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content }];
